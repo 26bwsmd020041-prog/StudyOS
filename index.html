@@ -1,4 +1,4 @@
-<!DOCTYPE htm
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -41,7 +41,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}.hidden{display:
 
 <section id="textbooks" class="page">
 <div class="section"><h2>📕 My Textbooks</h2><button class="btn primary" onclick="addBook()">+ Add textbook</button></div>
-<div class="panel"><h3>Use a FlipHTML5 textbook</h3><p class="muted">Paste the public FlipHTML5 book URL. StudyOS will display the book inside the app. FlipHTML5 officially supports iframe embedding. citeturn0search0</p><label>FlipHTML5 book URL</label><input id="bookUrl" placeholder="https://fliphtml5.com/...">
+<div class="panel"><h3>Use a FlipHTML5 textbook</h3><p class="muted">Paste a FlipHTML5 URL or full iframe embed code. StudyOS will normalize and display the book inside the app.</p><label>FlipHTML5 URL or Embed Code</label><input id="bookUrl" placeholder="https://fliphtml5.com/... or iframe embed code">
 <label>Book name</label><input id="bookName" placeholder="e.g. Grade 6 Science">
 <div class="actions"><button class="btn primary" onclick="saveBook()">Add to my textbooks</button></div></div>
 <div id="books"></div>
@@ -96,12 +96,47 @@ function showPage(id){document.querySelectorAll(".page").forEach(x=>x.classList.
 document.querySelectorAll("[data-page]").forEach(x=>x.onclick=()=>showPage(x.dataset.page));
 function finishSetup(){let n=document.getElementById("setupName").value.trim();if(!n){toast("Enter your name.");return}data.name=n;data.goal=+document.getElementById("setupGoal").value;data.setup=true;save();document.getElementById("setup").classList.add("hidden");document.getElementById("app").classList.remove("hidden");render()}
 function render(){document.getElementById("userName").textContent=data.name||"Student";document.getElementById("sideName").textContent=data.name||"Student";document.getElementById("avatar").textContent=(data.name||"S")[0].toUpperCase();document.getElementById("sideGoal").textContent=data.goal+" min daily goal";document.getElementById("xp").textContent=data.xp;document.getElementById("streak").textContent=data.streak;document.getElementById("booksCount").textContent=data.books.length;document.getElementById("accuracy").textContent=data.quizTotal?Math.round(data.quizCorrect/data.quizTotal*100)+"%":"—";renderBooks();renderHomeBooks();renderCards();renderNotes();renderProgress()}
-function saveBook(){let u=document.getElementById("bookUrl").value.trim(),n=document.getElementById("bookName").value.trim()||"My textbook";if(!/^https?:\/\//i.test(u)){toast("Paste a full book URL.");return}if(!/fliphtml5\.com/i.test(u)){toast("Please use a FlipHTML5 book URL.");return}data.books.push({url:u,name:n,date:new Date().toLocaleDateString()});save();document.getElementById("bookUrl").value="";document.getElementById("bookName").value="";render();toast("Textbook added! 📕")}
+
+function cleanFlipHTML5Url(raw){
+  if(!raw)return"";
+  let str=raw.trim();
+  let match=str.match(/src=["']([^"']+)["']/i);
+  if(match)str=match[1];
+  if(str.startsWith("//"))str="https:"+str;
+  if(!/^https?:\/\//i.test(str))return"";
+  if(!/fliphtml5\.com/i.test(str))return"";
+  return str.replace(/^https?:\/\/(?:www\.)?fliphtml5\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)\/?/i,function(m,u,b){
+    if(['help','blog','docs','center','download'].includes(u.toLowerCase()))return m;
+    return`https://online.fliphtml5.com/${u}/${b}/`;
+  });
+}
+
+function saveBook(){
+  let raw=document.getElementById("bookUrl").value.trim(),n=document.getElementById("bookName").value.trim()||"My textbook";
+  let cleanUrl=cleanFlipHTML5Url(raw);
+  if(!cleanUrl){toast("Please enter a valid FlipHTML5 URL or iframe embed code.");return}
+  data.books.push({url:cleanUrl,name:n,date:new Date().toLocaleDateString()});
+  save();
+  document.getElementById("bookUrl").value="";
+  document.getElementById("bookName").value="";
+  render();
+  toast("Textbook added! 📕")
+}
+
 function addBook(){showPage("textbooks");document.getElementById("bookUrl").focus()}
 function renderBooks(){let el=document.getElementById("books");if(!data.books.length){el.innerHTML='<div class="panel" style="margin-top:15px;text-align:center;color:var(--muted)">No textbooks yet. Add your first FlipHTML5 book above.</div>';return}el.innerHTML=data.books.map((b,i)=>`<div class="book-card"><strong>📕 ${esc(b.name)}</strong><small style="display:block;color:var(--muted)">${esc(b.date)}</small><div class="book-actions"><button class="btn primary" onclick="readBook(${i})">Read inside StudyOS</button><button class="btn secondary" onclick="copyBook(${i})">Copy link</button><button class="btn danger" onclick="deleteBook(${i})">Remove</button></div><div id="reader${i}" class="hidden"></div></div>`).join("")}
 function renderHomeBooks(){document.getElementById("homeBooks").innerHTML=data.books.length?data.books.slice(0,3).map((b,i)=>`<div class="lesson"><div style="font-size:27px">📕</div><div style="flex:1"><strong>${esc(b.name)}</strong><br><small class="muted">FlipHTML5 textbook</small></div><button class="btn secondary" onclick="showPage('textbooks');setTimeout(()=>readBook(${i}),100)">Open</button></div>`).join(""):'<div class="panel" style="color:var(--muted)">No textbooks yet. Add one to start building your personal study library.</div>'}
-function readBook(i){let r=document.getElementById("reader"+i);r.classList.toggle("hidden");if(!r.innerHTML)r.innerHTML=`<div style="margin-top:12px"><iframe class="book-frame" src="${esc(data.books[i].url)}" title="${esc(data.books[i].name)}" allowfullscreen></iframe><p class="muted" style="font-size:13px">Tip: while reading, copy a section of text from the book and paste it into <b>AI Tutor</b> so the AI can work from that material.</p></div>`}
-function copyBook(i){navigator.clipboard?.writeText(data.books[i].url).then(()=>toast("Book link copied!")).catch(()=>toast(data.books[i].url))}
+
+function readBook(i){
+  let r=document.getElementById("reader"+i);
+  r.classList.toggle("hidden");
+  if(!r.innerHTML){
+    let embedUrl=cleanFlipHTML5Url(data.books[i].url)||data.books[i].url;
+    r.innerHTML=`<div style="margin-top:12px"><iframe class="book-frame" src="${esc(embedUrl)}" title="${esc(data.books[i].name)}" allowfullscreen="true" seamless="seamless" scrolling="no" frameborder="0" allowtransparency="true"></iframe><p class="muted" style="font-size:13px;margin-top:8px">Tip: while reading, copy a section of text from the book and paste it into <b>AI Tutor</b> so the AI can work from that material. Having trouble? <a href="${esc(embedUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--p)">Open in new tab</a></p></div>`;
+  }
+}
+
+function copyBook(i){let embedUrl=cleanFlipHTML5Url(data.books[i].url)||data.books[i].url;navigator.clipboard?.writeText(embedUrl).then(()=>toast("Book link copied!")).catch(()=>toast(embedUrl))}
 function deleteBook(i){if(confirm("Remove this textbook?")){data.books.splice(i,1);save();render()}}
 function saveAI(){let e=document.getElementById("aiEndpoint").value.trim(),k=document.getElementById("aiKey").value;localStorage.setItem("studyOSAI",JSON.stringify({endpoint:e,key:k}));document.getElementById("aiStatus").textContent=e?"AI settings saved on this device.":"Add an endpoint first.";toast("AI settings saved.")}
 function loadAI(){try{let x=JSON.parse(localStorage.getItem("studyOSAI")||"{}");document.getElementById("aiEndpoint").value=x.endpoint||"";document.getElementById("aiKey").value=x.key||""}catch{}}
