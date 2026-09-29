@@ -41,7 +41,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}.hidden{display:
 
 <section id="textbooks" class="page">
 <div class="section"><h2>📕 My Textbooks</h2><button class="btn primary" onclick="addBook()">+ Add textbook</button></div>
-<div class="panel"><h3>Use a FlipHTML5 textbook</h3><p class="muted">Paste a FlipHTML5 URL or full iframe embed code. StudyOS will normalize and display the book inside the app.</p><label>FlipHTML5 URL or Embed Code</label><input id="bookUrl" placeholder="https://fliphtml5.com/... or iframe embed code">
+<div class="panel"><h3>Use a FlipHTML5 textbook</h3><p class="muted">Paste any FlipHTML5 share link, website URL, or iframe embed code. StudyOS will automatically convert it into a direct embedded book viewer.</p><label>FlipHTML5 Share URL or Embed Code</label><input id="bookUrl" placeholder="https://fliphtml5.com/... or iframe embed code">
 <label>Book name</label><input id="bookName" placeholder="e.g. Grade 6 Science">
 <div class="actions"><button class="btn primary" onclick="saveBook()">Add to my textbooks</button></div></div>
 <div id="books"></div>
@@ -99,16 +99,34 @@ function render(){document.getElementById("userName").textContent=data.name||"St
 
 function cleanFlipHTML5Url(raw){
   if(!raw)return"";
-  let str=raw.trim();
+  let str=String(raw).trim();
   let match=str.match(/src=["']([^"']+)["']/i);
   if(match)str=match[1];
   if(str.startsWith("//"))str="https:"+str;
   if(!/^https?:\/\//i.test(str))return"";
   if(!/fliphtml5\.com/i.test(str))return"";
-  return str.replace(/^https?:\/\/(?:www\.)?fliphtml5\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)\/?/i,function(m,u,b){
-    if(['help','blog','docs','center','download'].includes(u.toLowerCase()))return m;
-    return`https://online.fliphtml5.com/${u}/${b}/`;
+  let pattern=/(?:https?:\/\/)?(?:online\.|www\.)?fliphtml5\.com\/(?:read\/)?([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/i;
+  let m=str.match(pattern);
+  if(m){
+    let user=m[1],book=m[2];
+    let reserved=['help','blog','docs','center','download','explore','template','learning','pricing','login','register','homepage','bookcase','about','privacy','terms'];
+    if(!reserved.includes(user.toLowerCase())){
+      return `https://online.fliphtml5.com/${user}/${book}/`;
+    }
+  }
+  return str;
+}
+
+// Auto-convert previously saved standard links in localStorage
+if(data.books&&Array.isArray(data.books)){
+  let updated=false;
+  data.books.forEach(b=>{
+    if(b.url){
+      let cleaned=cleanFlipHTML5Url(b.url);
+      if(cleaned&&cleaned!==b.url){b.url=cleaned;updated=true}
+    }
   });
+  if(updated)save();
 }
 
 function saveBook(){
@@ -132,7 +150,7 @@ function readBook(i){
   r.classList.toggle("hidden");
   if(!r.innerHTML){
     let embedUrl=cleanFlipHTML5Url(data.books[i].url)||data.books[i].url;
-    r.innerHTML=`<div style="margin-top:12px"><iframe class="book-frame" src="${esc(embedUrl)}" title="${esc(data.books[i].name)}" allowfullscreen="true" seamless="seamless" scrolling="no" frameborder="0" allowtransparency="true"></iframe><p class="muted" style="font-size:13px;margin-top:8px">Tip: while reading, copy a section of text from the book and paste it into <b>AI Tutor</b> so the AI can work from that material. Having trouble? <a href="${esc(embedUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--p)">Open in new tab</a></p></div>`;
+    r.innerHTML=`<div style="margin-top:12px"><iframe class="book-frame" src="${esc(embedUrl)}" title="${esc(data.books[i].name)}" allowfullscreen="true" allow="fullscreen" seamless="seamless" scrolling="no" frameborder="0" allowtransparency="true" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"></iframe><p class="muted" style="font-size:13px;margin-top:8px">Tip: while reading, copy a section of text from the book and paste it into <b>AI Tutor</b> so the AI can work from that material. Having trouble? <a href="${esc(embedUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--p)">Open in new tab</a></p></div>`;
   }
 }
 
